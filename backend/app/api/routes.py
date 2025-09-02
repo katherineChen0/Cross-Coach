@@ -73,6 +73,26 @@ def get_user_insights(
     """Get correlation insights for the current user."""
     return services.get_correlation_insights_for_user(db, str(current_user.id))
 
+@api_router.post("/analyze-correlations")
+def analyze_correlations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trigger correlation analysis for the current user."""
+    try:
+        from ..scripts.correlation_analysis import run_correlation_analysis
+        results = run_correlation_analysis(current_user.id)
+        return {
+            "message": "Correlation analysis completed successfully",
+            "user_id": str(current_user.id),
+            "total_logs": results["total_logs"],
+            "total_metrics": results["total_metrics"],
+            "significant_correlations": results["significant_correlations"],
+            "insights_generated": len(results["positive_correlations"]) + len(results["negative_correlations"])
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
 # Legacy routes for backward compatibility
 @api_router.post("/users", response_model=UserRead)
 def create_user(payload, db: Session = Depends(get_db)):
