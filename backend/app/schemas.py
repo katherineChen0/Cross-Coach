@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr
 from datetime import date, datetime
 from typing import Optional, Any
+from uuid import UUID
 from .models import DomainEnum
 
 # Authentication schemas
@@ -22,7 +23,7 @@ class UserCreate(BaseModel):
     name: Optional[str] = None
 
 class UserRead(BaseModel):
-    id: str
+    id: UUID
     email: str
     name: Optional[str] = None
     
@@ -38,8 +39,8 @@ class LogEntryCreate(BaseModel):
     notes: Optional[str] = None
 
 class LogEntryRead(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     date: date
     domain: DomainEnum
     metric: str
@@ -56,8 +57,8 @@ class JournalEntryCreate(BaseModel):
     mood_score: Optional[float] = Field(None, ge=0, le=10)
 
 class JournalEntryRead(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     date: date
     domain: DomainEnum = DomainEnum.reflection
     metric: str = "journal_entry"
@@ -69,8 +70,8 @@ class JournalEntryRead(BaseModel):
 
 # Correlation insight schemas
 class CorrelationInsightRead(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     description: str
     correlation_score: float
     created_at: datetime
@@ -80,8 +81,8 @@ class CorrelationInsightRead(BaseModel):
 
 # Journal summary schemas
 class JournalSummaryRead(BaseModel):
-    id: str
-    user_id: str
+    id: UUID
+    user_id: UUID
     date: date
     summary_text: str
     
