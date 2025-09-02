@@ -11,34 +11,42 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 type Log = {
   id: string;
   user_id: string;
-  log_date: string;
+  date: string;
   domain: string;
-  value?: number | null;
-  metrics?: Record<string, any> | null;
-  note?: string | null;
+  metric: string;
+  value: number;
+  notes?: string | null;
 };
 
 type Insight = {
   id: string;
   user_id: string;
-  week_start: string;
-  summary?: string | null;
-  correlations?: Record<string, number> | null;
+  description: string;
+  correlation_score: number;
+  created_at: string;
 };
 
 const DashboardPage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || !token) return;
     
     try {
       const [logsResponse, insightsResponse] = await Promise.all([
-        axios.get(`${API_BASE}/api/logs/${user.id}`),
-        axios.get(`${API_BASE}/api/insights/${user.id}`)
+        axios.get(`${API_BASE}/api/logs`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }),
+        axios.get(`${API_BASE}/api/insights`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
       ]);
       
       setLogs(logsResponse.data);
@@ -52,7 +60,7 @@ const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [user, token]);
 
   const handleLogCreated = () => {
     loadData();
@@ -98,8 +106,8 @@ const DashboardPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Forms */}
           <div className="lg:col-span-1 space-y-6">
-            <LogEntryForm userId={user!.id} onLogCreated={handleLogCreated} />
-            <JournalEntry userId={user!.id} onEntryCreated={handleLogCreated} />
+            <LogEntryForm userId={user!.id} onLogCreated={handleLogCreated} token={token!} />
+            <JournalEntry userId={user!.id} onEntryCreated={handleLogCreated} token={token!} />
           </div>
 
           {/* Right Column - Charts and Insights */}
@@ -129,6 +137,9 @@ const DashboardPage: React.FC = () => {
                         Domain
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Metric
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Value
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -140,7 +151,7 @@ const DashboardPage: React.FC = () => {
                     {logs.slice(0, 10).map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(log.log_date).toLocaleDateString()}
+                          {new Date(log.date).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -148,10 +159,13 @@ const DashboardPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.value !== null && log.value !== undefined ? log.value : '-'}
+                          {log.metric}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {log.value}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                          {log.note || '-'}
+                          {log.notes || '-'}
                         </td>
                       </tr>
                     ))}

@@ -11,6 +11,7 @@ type User = {
 
 type AuthContextType = {
   user: User | null;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
@@ -29,13 +30,15 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
       // Set default authorization header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
       
       // Verify token and get user info
       const verifyToken = async () => {
@@ -44,6 +47,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setUser(response.data);
         } catch (error) {
           localStorage.removeItem('token');
+          setToken(null);
           delete axios.defaults.headers.common['Authorization'];
         } finally {
           setLoading(false);
@@ -64,6 +68,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       const { access_token } = response.data;
       localStorage.setItem('token', access_token);
+      setToken(access_token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       
       // Get user info after login
@@ -91,12 +96,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     localStorage.removeItem('token');
+    setToken(null);
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };
 
   const value = {
     user,
+    token,
     login,
     register,
     logout,

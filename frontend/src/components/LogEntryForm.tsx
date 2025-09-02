@@ -6,7 +6,22 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 type LogEntryFormProps = {
   userId: string;
   onLogCreated: () => void;
+  token: string; // Add token prop for authentication
 };
+
+// Map frontend domains to backend DomainEnum values
+const domainMapping = {
+  'fitness': 'fitness',
+  'climbing': 'climbing',
+  'coding': 'learning', // Map coding to learning
+  'mood': 'reflection', // Map mood to reflection
+  'sleep': 'sleep',
+  'journaling': 'reflection', // Map journaling to reflection
+  'nutrition': 'other', // Map nutrition to other
+  'meditation': 'reflection', // Map meditation to reflection
+  'reading': 'learning', // Map reading to learning
+  'social': 'other' // Map social to other
+} as const;
 
 const domains = [
   'fitness',
@@ -34,7 +49,7 @@ const metricNames = {
   social: ['social_interactions', 'quality_time', 'new_connections']
 };
 
-const LogEntryForm: React.FC<LogEntryFormProps> = ({ userId, onLogCreated }) => {
+const LogEntryForm: React.FC<LogEntryFormProps> = ({ userId, onLogCreated, token }) => {
   const [domain, setDomain] = useState<typeof domains[number]>('fitness');
   const [metricName, setMetricName] = useState('');
   const [value, setValue] = useState('');
@@ -46,16 +61,22 @@ const LogEntryForm: React.FC<LogEntryFormProps> = ({ userId, onLogCreated }) => 
     setLoading(true);
 
     try {
+      // Map the frontend domain to backend domain
+      const backendDomain = domainMapping[domain];
+      
       const payload = {
-        user_id: userId,
-        log_date: new Date().toISOString().slice(0, 10),
-        domain,
-        value: value === '' ? null : Number(value),
-        metrics: metricName ? { [metricName]: value === '' ? null : Number(value) } : null,
-        note: notes || null
+        date: new Date().toISOString().slice(0, 10),
+        domain: backendDomain,
+        metric: metricName || 'general_metric',
+        value: value === '' ? 0.0 : Number(value),
+        notes: notes || null
       };
 
-      await axios.post(`${API_BASE}/api/logs`, payload);
+      await axios.post(`${API_BASE}/api/log`, payload, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       // Reset form
       setValue('');
@@ -65,6 +86,7 @@ const LogEntryForm: React.FC<LogEntryFormProps> = ({ userId, onLogCreated }) => 
       onLogCreated();
     } catch (error) {
       console.error('Error creating log:', error);
+      alert('Failed to create log entry. Please try again.');
     } finally {
       setLoading(false);
     }

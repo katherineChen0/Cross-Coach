@@ -6,9 +6,10 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 type JournalEntryProps = {
   userId: string;
   onEntryCreated: () => void;
+  token: string; // Add token prop for authentication
 };
 
-const JournalEntry: React.FC<JournalEntryProps> = ({ userId, onEntryCreated }) => {
+const JournalEntry: React.FC<JournalEntryProps> = ({ userId, onEntryCreated, token }) => {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -20,21 +21,23 @@ const JournalEntry: React.FC<JournalEntryProps> = ({ userId, onEntryCreated }) =
 
     try {
       const payload = {
-        user_id: userId,
-        log_date: new Date().toISOString().slice(0, 10),
-        domain: 'journaling',
-        note: content,
-        value: null,
-        metrics: null
+        date: new Date().toISOString().slice(0, 10),
+        content: content,
+        mood_score: null // Optional mood score
       };
 
-      await axios.post(`${API_BASE}/api/logs`, payload);
+      await axios.post(`${API_BASE}/api/journal`, payload, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
       // Reset form
       setContent('');
       onEntryCreated();
     } catch (error) {
       console.error('Error creating journal entry:', error);
+      alert('Failed to create journal entry. Please try again.');
     } finally {
       setLoading(false);
     }

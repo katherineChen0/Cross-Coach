@@ -18,11 +18,11 @@ import {
 type Log = {
   id: string;
   user_id: string;
-  log_date: string;
+  date: string;
   domain: string;
-  value?: number | null;
-  metrics?: Record<string, any> | null;
-  note?: string | null;
+  metric: string;
+  value: number;
+  notes?: string | null;
 };
 
 type ChartsProps = {
@@ -35,13 +35,11 @@ const Charts: React.FC<ChartsProps> = ({ logs }) => {
   const chartData = useMemo(() => {
     // Group logs by date and domain
     const groupedByDate = logs.reduce((acc, log) => {
-      const date = log.log_date;
+      const date = log.date;
       if (!acc[date]) {
         acc[date] = {};
       }
-      if (log.value !== null && log.value !== undefined) {
-        acc[date][log.domain] = log.value;
-      }
+      acc[date][log.domain] = log.value;
       return acc;
     }, {} as Record<string, Record<string, number>>);
 
@@ -69,8 +67,7 @@ const Charts: React.FC<ChartsProps> = ({ logs }) => {
 
   const recentLogs = useMemo(() => {
     return logs
-      .filter(log => log.value !== null && log.value !== undefined)
-      .sort((a, b) => new Date(b.log_date).getTime() - new Date(a.log_date).getTime())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10);
   }, [logs]);
 
@@ -104,48 +101,76 @@ const Charts: React.FC<ChartsProps> = ({ logs }) => {
                 dataKey={domain}
                 stroke={COLORS[index % COLORS.length]}
                 strokeWidth={2}
-                dot={{ r: 4 }}
+                dot={{ fill: COLORS[index % COLORS.length] }}
               />
             ))}
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Domain Distribution Pie Chart */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity Distribution</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <PieChart>
-            <Pie
-              data={domainDistribution}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-              outerRadius={80}
-              fill="#8884d8"
-              dataKey="value"
-            >
-              {domainDistribution.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
+      {/* Domain Distribution */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity by Domain</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <PieChart>
+              <Pie
+                data={domainDistribution}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {domainDistribution.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+          <div className="space-y-3">
+            {recentLogs.map((log) => (
+              <div key={log.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900">{log.domain}</p>
+                  <p className="text-sm text-gray-600">{log.metric}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold text-gray-900">{log.value}</p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(log.date).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Recent Logs Bar Chart */}
+      {/* Value Distribution */}
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Value Distribution by Domain</h3>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={recentLogs}>
+          <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="log_date" />
+            <XAxis dataKey="date" />
             <YAxis />
             <Tooltip />
             <Legend />
-            <Bar dataKey="value" fill="#8884d8" />
+            {Object.keys(chartData[0] || {}).filter(key => key !== 'date').map((domain, index) => (
+              <Bar
+                key={domain}
+                dataKey={domain}
+                fill={COLORS[index % COLORS.length]}
+              />
+            ))}
           </BarChart>
         </ResponsiveContainer>
       </div>

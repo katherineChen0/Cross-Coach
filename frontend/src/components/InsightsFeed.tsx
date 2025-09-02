@@ -3,9 +3,9 @@ import React from 'react';
 type Insight = {
   id: string;
   user_id: string;
-  week_start: string;
-  summary?: string | null;
-  correlations?: Record<string, number> | null;
+  description: string;
+  correlation_score: number;
+  created_at: string;
 };
 
 type InsightsFeedProps = {
@@ -36,13 +36,8 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights }) => {
     return { strength, direction, color, value: correlation };
   };
 
-  const generateAICoachInsight = (insight: Insight) => {
-    const correlations = insight.correlations || {};
-    const topCorrelations = Object.entries(correlations)
-      .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
-      .slice(0, 3);
-
-    if (topCorrelations.length === 0) {
+  const generateAICoachInsight = (insights: Insight[]) => {
+    if (insights.length === 0) {
       return {
         title: "Keep up the great work!",
         message: "You're building consistent habits. Consider setting specific goals for areas you'd like to improve.",
@@ -50,14 +45,16 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights }) => {
       };
     }
 
-    const [strongestCorrelation] = topCorrelations;
-    const [metric, correlation] = strongestCorrelation;
-    const { strength, direction } = formatCorrelation(correlation);
+    const strongestInsight = insights.reduce((prev, current) => 
+      Math.abs(prev.correlation_score) > Math.abs(current.correlation_score) ? prev : current
+    );
 
-    if (Math.abs(correlation) >= 0.6) {
+    const { strength, direction } = formatCorrelation(strongestInsight.correlation_score);
+
+    if (Math.abs(strongestInsight.correlation_score) >= 0.6) {
       return {
         title: `Strong ${direction} correlation detected`,
-        message: `Your ${metric.replace(/_/g, ' ')} shows a ${strength.toLowerCase()} ${direction} relationship with other activities. This could indicate a key factor in your routine.`,
+        message: strongestInsight.description,
         type: "correlation"
       };
     }
@@ -86,8 +83,7 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights }) => {
     );
   }
 
-  const latestInsight = insights[0];
-  const aiInsight = generateAICoachInsight(latestInsight);
+  const aiInsight = generateAICoachInsight(insights);
 
   return (
     <div className="space-y-6">
@@ -105,51 +101,41 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights }) => {
             <h4 className="text-lg font-semibold text-gray-900 mb-2">{aiInsight.title}</h4>
             <p className="text-gray-700 mb-3">{aiInsight.message}</p>
             <div className="text-sm text-gray-500">
-              Week of {new Date(latestInsight.week_start).toLocaleDateString()}
+              Latest insight from {new Date(insights[0].created_at).toLocaleDateString()}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Weekly Summary */}
-      {latestInsight.summary && (
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">Weekly Summary</h4>
-          <div className="prose prose-sm max-w-none">
-            <p className="text-gray-700 whitespace-pre-wrap">{latestInsight.summary}</p>
-          </div>
-        </div>
-      )}
-
       {/* Correlation Insights */}
-      {latestInsight.correlations && Object.keys(latestInsight.correlations).length > 0 && (
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4">Key Correlations</h4>
-          <div className="grid gap-3">
-            {Object.entries(latestInsight.correlations)
-              .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
-              .slice(0, 5)
-              .map(([metric, correlation]) => {
-                const { strength, direction, color, value } = formatCorrelation(correlation);
-                return (
-                  <div key={metric} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <span className="font-medium text-gray-900">
-                        {metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </span>
-                      <span className={`ml-2 text-sm ${color}`}>
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">Key Insights</h4>
+        <div className="space-y-4">
+          {insights.slice(0, 5).map((insight) => {
+            const { strength, direction, color, value } = formatCorrelation(insight.correlation_score);
+            return (
+              <div key={insight.id} className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-gray-900 mb-2">{insight.description}</p>
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-sm font-medium ${color}`}>
                         {strength} {direction} correlation
                       </span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(insight.created_at).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="text-sm font-mono text-gray-600">
-                      {value.toFixed(3)}
-                    </span>
                   </div>
-                );
-              })}
-          </div>
+                  <span className="text-sm font-mono text-gray-600 ml-4">
+                    {value.toFixed(3)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -157,21 +143,19 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({ insights }) => {
           <div className="text-2xl font-bold text-blue-600">
             {insights.length}
           </div>
-          <div className="text-sm text-gray-600">Weeks Analyzed</div>
+          <div className="text-sm text-gray-600">Total Insights</div>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-4 text-center">
           <div className="text-2xl font-bold text-green-600">
-            {latestInsight.correlations ? Object.keys(latestInsight.correlations).length : 0}
+            {insights.filter(insight => Math.abs(insight.correlation_score) >= 0.4).length}
           </div>
-          <div className="text-sm text-gray-600">Patterns Found</div>
+          <div className="text-sm text-gray-600">Strong Correlations</div>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-4 text-center">
           <div className="text-2xl font-bold text-purple-600">
-            {latestInsight.correlations 
-              ? Object.values(latestInsight.correlations).filter(c => Math.abs(c) >= 0.4).length 
-              : 0}
+            {insights.filter(insight => insight.correlation_score > 0).length}
           </div>
-          <div className="text-sm text-gray-600">Strong Correlations</div>
+          <div className="text-sm text-gray-600">Positive Patterns</div>
         </div>
       </div>
     </div>
