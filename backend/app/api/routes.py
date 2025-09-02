@@ -139,6 +139,11 @@ def create_user(payload, db: Session = Depends(get_db)):
     user = services.create_user(db, payload)
     return user
 
+@api_router.get("/users/me", response_model=UserRead)
+def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user information."""
+    return current_user
+
 @api_router.get("/users/{user_id}", response_model=UserRead)
 def get_user(user_id: str, db: Session = Depends(get_db)):
     user = services.get_user(db, user_id)

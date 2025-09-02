@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from ..db import SessionLocal
-from ..models import Log, Insight
+from ..models import LogEntry, CorrelationInsight
 from ..core.config import settings
 import numpy as np
 import httpx
@@ -45,21 +45,21 @@ def run_once():
 	db: Session = SessionLocal()
 	try:
 		# For each user-week compute correlations across domains
-		users_dates = db.execute(select(Log.user_id, Log.log_date)).all()
+		users_dates = db.execute(select(LogEntry.user_id, LogEntry.date)).all()
 		user_ids = list({u for u, _ in users_dates})
 		for user_id in user_ids:
 			# Determine last 7 days window
 			end = date.today()
 			start = end - timedelta(days=6)
 			logs = db.execute(
-				select(Log).where(Log.user_id == user_id, Log.log_date >= start, Log.log_date <= end)
+				select(LogEntry).where(LogEntry.user_id == user_id, LogEntry.date >= start, LogEntry.date <= end)
 			).scalars().all()
 			# Build domain -> date -> value mapping
 			domain_to_values: dict[str, dict[date, float]] = {}
 			for log in logs:
 				if log.value is None:
 					continue
-				domain_to_values.setdefault(log.domain, {})[log.log_date] = float(log.value)
+				domain_to_values.setdefault(log.domain.value, {})[log.date] = float(log.value)
 			# Compute pairwise correlations
 			domains = list(domain_to_values.keys())
 			correlations: dict[str, float] = {}
@@ -74,9 +74,8 @@ def run_once():
 					if r is not None:
 						correlations[f"{d1}~{d2}"] = r
 			# Summarize journal entries
-			journals = [l.note for l in logs if l.domain == "journaling" and l.note]
+			journals = [l.notes for l in logs if l.domain.value == "reflection" and l.notes]
 			summary_text = "\n\n".join(journals)
-			week_start = start
 			if summary_text:
 				try:
 					summary = asyncio.run(generate_summary(summary_text))
@@ -84,16 +83,16 @@ def run_once():
 					summary = None
 			else:
 				summary = None
-			# Upsert insight
-			insight = db.execute(
-				select(Insight).where(Insight.user_id == user_id, Insight.week_start == week_start)
-			).scalar_one_or_none()
-			if insight:
-				insight.correlations = correlations or None
-				insight.summary = summary
-			else:
-				insight = Insight(user_id=user_id, week_start=week_start, correlations=correlations or None, summary=summary)
-				db.add(insight)
+			# Create correlation insight
+			if correlations:
+				for correlation_key, correlation_score in correlations.items():
+					description = f"Correlation between {correlation_key.replace('~', ' and ')}: {correlation_score:.3f}"
+					insight = CorrelationInsight(
+						user_id=user_id,
+						description=description,
+						correlation_score=correlation_score
+					)
+					db.add(insight)
 			db.commit()
 	finally:
 		db.close()

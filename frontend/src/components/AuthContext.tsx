@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Verify token and get user info
       const verifyToken = async () => {
         try {
-          const response = await axios.get(`${API_BASE}/api/auth/me`);
+          const response = await axios.get(`${API_BASE}/api/users/me`);
           setUser(response.data);
         } catch (error) {
           localStorage.removeItem('token');
@@ -57,15 +57,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post(`${API_BASE}/api/auth/login`, {
+      const response = await axios.post(`${API_BASE}/api/login`, {
         email,
         password,
       });
       
-      const { token, user: userData } = response.data;
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
+      const { access_token } = response.data;
+      localStorage.setItem('token', access_token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      
+      // Get user info after login
+      const userResponse = await axios.get(`${API_BASE}/api/users/me`);
+      setUser(userResponse.data);
     } catch (error: any) {
       throw new Error(error.response?.data?.detail || 'Login failed');
     }
@@ -73,16 +76,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      const response = await axios.post(`${API_BASE}/api/auth/register`, {
+      const response = await axios.post(`${API_BASE}/api/register`, {
         email,
         password,
         name,
       });
       
-      const { token, user: userData } = response.data;
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
+      // After registration, login the user
+      await login(email, password);
     } catch (error: any) {
       throw new Error(error.response?.data?.detail || 'Registration failed');
     }
