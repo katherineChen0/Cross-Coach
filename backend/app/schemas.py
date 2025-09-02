@@ -78,6 +78,23 @@ class CorrelationInsightRead(BaseModel):
     class Config:
         from_attributes = True
 
+# Journal summary schemas
+class JournalSummaryRead(BaseModel):
+    id: str
+    user_id: str
+    date: date
+    summary_text: str
+    
+    class Config:
+        from_attributes = True
+
+class JournalSummaryCreate(BaseModel):
+    date: date
+    text: str
+
+class AIInsightsResponse(BaseModel):
+    insights: str
+
 # Legacy schemas for backward compatibility
 class LogCreate(BaseModel):
     user_id: str

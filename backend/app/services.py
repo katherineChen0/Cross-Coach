@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from .models import User, LogEntry, CorrelationInsight, DomainEnum
+from .models import User, LogEntry, CorrelationInsight, JournalSummary, DomainEnum
 from .schemas import UserRegister, LogEntryCreate, JournalEntryCreate
 from .core.auth import get_password_hash, verify_password
+from .core.config import settings
 from datetime import date
 import uuid
+import openai
 
 
 def create_user(db: Session, payload: UserRegister) -> User:
@@ -108,4 +110,161 @@ def create_log(db: Session, payload) -> LogEntry:
     db.add(log_entry)
     db.commit()
     db.refresh(log_entry)
-    return log_entry 
+    return log_entry
+
+
+def summarize_journal(text: str) -> str:
+    """
+    Use OpenAI GPT API to summarize journal text into 2-3 sentences.
+    
+    Args:
+        text: The journal text to summarize
+        
+    Returns:
+        A 2-3 sentence summary of the journal entry
+    """
+    if not settings.openai_api_key:
+        raise ValueError("OpenAI API key not configured")
+    
+    # Configure OpenAI client
+    client = openai.OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_api_base
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that summarizes journal entries. Provide concise, 2-3 sentence summaries that capture the key themes, emotions, and insights from the journal entry. Focus on the most important points and maintain a supportive, understanding tone."
+                },
+                {
+                    "role": "user",
+                    "content": f"Please summarize this journal entry in 2-3 sentences:\n\n{text}"
+                }
+            ],
+            max_tokens=150,
+            temperature=0.3
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        # Fallback to a simple summary if API call fails
+        words = text.split()
+        if len(words) <= 20:
+            return text
+        else:
+            return " ".join(words[:20]) + "..."
+
+
+def create_journal_summary(db: Session, user_id: str, date: date, text: str) -> JournalSummary:
+    """
+    Create a journal summary and store it in the database.
+    
+    Args:
+        db: Database session
+        user_id: User ID
+        date: Date of the journal entry
+        text: Journal text to summarize
+        
+    Returns:
+        The created JournalSummary object
+    """
+    summary_text = summarize_journal(text)
+    
+    journal_summary = JournalSummary(
+        user_id=user_id,
+        date=date,
+        summary_text=summary_text
+    )
+    
+    db.add(journal_summary)
+    db.commit()
+    db.refresh(journal_summary)
+    return journal_summary
+
+
+def generate_ai_coach_insights(logs: list[LogEntry], correlations: list[CorrelationInsight]) -> str:
+    """
+    Generate AI coach insights based on user data and correlations.
+    
+    Args:
+        logs: List of user's log entries
+        correlations: List of correlation insights
+        
+    Returns:
+        A string containing 1-2 weekly recommendations in natural language
+    """
+    if not settings.openai_api_key:
+        return "AI insights not available - OpenAI API key not configured."
+    
+    # Prepare data for analysis
+    recent_logs = sorted(logs, key=lambda x: x.date, reverse=True)[:50]  # Last 50 entries
+    
+    # Create a summary of recent activity
+    activity_summary = []
+    for log in recent_logs:
+        activity_summary.append(f"{log.date}: {log.domain.value} - {log.metric}: {log.value}")
+        if log.notes:
+            activity_summary.append(f"  Notes: {log.notes}")
+    
+    # Prepare correlation insights
+    correlation_text = ""
+    if correlations:
+        correlation_text = "Recent insights about your patterns:\n"
+        for corr in correlations[:5]:  # Top 5 correlations
+            correlation_text += f"- {corr.description} (correlation: {corr.correlation_score:.2f})\n"
+    
+    # Configure OpenAI client
+    client = openai.OpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_api_base
+    )
+    
+    try:
+        prompt = f"""
+You are an AI coach analyzing a user's wellness data. Based on their recent activity and patterns, provide 1-2 specific, actionable weekly recommendations.
+
+Recent Activity:
+{chr(10).join(activity_summary[:20])}  # Limit to first 20 entries for brevity
+
+{correlation_text}
+
+Please provide 1-2 specific, actionable recommendations for the upcoming week. Focus on:
+- Building on positive patterns
+- Addressing areas for improvement
+- Specific, measurable actions
+- Supportive and encouraging tone
+
+Format your response as natural, conversational advice (2-3 sentences per recommendation).
+"""
+        
+        response = client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a supportive AI wellness coach. Provide specific, actionable advice based on user data patterns. Be encouraging and practical."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            max_tokens=300,
+            temperature=0.4
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        return f"Unable to generate AI insights at this time. Error: {str(e)}"
+
+
+def get_journal_summaries_for_user(db: Session, user_id: str) -> list[JournalSummary]:
+    """Get journal summaries for a user."""
+    stmt = select(JournalSummary).where(JournalSummary.user_id == user_id).order_by(JournalSummary.date.desc())
+    return list(db.execute(stmt).scalars().all()) 

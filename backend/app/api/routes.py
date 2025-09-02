@@ -7,7 +7,7 @@ from ..models import User
 from ..schemas import (
     UserRegister, UserLogin, Token, UserRead,
     LogEntryCreate, LogEntryRead, JournalEntryCreate, JournalEntryRead,
-    CorrelationInsightRead
+    CorrelationInsightRead, JournalSummaryRead, JournalSummaryCreate, AIInsightsResponse
 )
 
 api_router = APIRouter()
@@ -92,6 +92,46 @@ def analyze_correlations(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@api_router.post("/journal/summarize", response_model=JournalSummaryRead)
+def create_journal_summary(
+    payload: JournalSummaryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a journal summary using AI."""
+    try:
+        journal_summary = services.create_journal_summary(
+            db, str(current_user.id), payload.date, payload.text
+        )
+        return journal_summary
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create summary: {str(e)}")
+
+@api_router.get("/journal/summaries", response_model=list[JournalSummaryRead])
+def get_journal_summaries(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all journal summaries for the current user."""
+    return services.get_journal_summaries_for_user(db, str(current_user.id))
+
+@api_router.get("/ai-insights", response_model=AIInsightsResponse)
+def get_ai_coach_insights(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate AI coach insights based on user data and correlations."""
+    try:
+        logs = services.get_logs_for_user(db, str(current_user.id))
+        correlations = services.get_correlation_insights_for_user(db, str(current_user.id))
+        
+        insights = services.generate_ai_coach_insights(logs, correlations)
+        return AIInsightsResponse(insights=insights)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate insights: {str(e)}")
 
 # Legacy routes for backward compatibility
 @api_router.post("/users", response_model=UserRead)
