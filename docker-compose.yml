@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: crosscoach-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crosscoach}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crosscoach}
+      POSTGRES_DB: ${POSTGRES_DB:-crosscoach}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crosscoach-backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://crosscoach:crosscoach@db:5432/crosscoach}
+      BACKEND_HOST: ${BACKEND_HOST:-0.0.0.0}
+      BACKEND_PORT: ${BACKEND_PORT:-8000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  analytics:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crosscoach-analytics
+    command: ["python", "-m", "app.analytics.worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://crosscoach:crosscoach@db:5432/crosscoach}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_API_BASE: ${OPENAI_API_BASE:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: crosscoach-frontend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  db_data: 
